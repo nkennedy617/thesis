@@ -1,0 +1,10 @@
+#!/bin/sh
+
+TMP2=/home/nbeatty/perl_scripts/loadaverage.tmp2
+OLDIFS="$IFS"
+IFS="
+"
+ for i in `cat $TMP2`; do
+       echo $i
+   done
+   IFS="$OLDIFS"

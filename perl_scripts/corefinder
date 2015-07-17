@@ -1,0 +1,50 @@
+#!/bin/sh
+
+#---------------------------------------------------------------
+# corefinder
+# Written by : Ethan Davies
+# Created on : 03/30/2000
+# Last Modified : 04/05/2000 by Ethan Davies
+#
+# This script checks each machine listed in /usr/local/share/adm/Ws.index
+# for core files. If one is found it does a "file" command on the core
+# for info about how it was created. 
+#
+# CALLED FROM : cron on citron
+#---------------------------------------------------------------
+
+hosts=`cat /usr/local/share/adm/Ws.index/wsname.all` 
+TMP=/var/tmp/core_ead.tmp
+REPORT=/var/tmp/core_ead.rep
+NONRESPONSE=""
+
+echo "" > $TMP
+
+for host in $hosts 
+do
+    if /usr/local/bin/alive $host ; then
+        result=`rsh $host ls -l /core 2> /dev/null`
+
+        if [ "$result" != "" ]; then
+			echo $host >> $TMP
+			echo "========" >> $TMP
+			echo $result >> $TMP
+            echo "`rsh $host file /core`" >> $TMP
+			echo >> $TMP
+        fi
+    else
+        NONRESPONSE="$NONRESPONSE $host"
+    fi
+done
+
+echo "Hosts not responding:" > $REPORT
+echo "=====================" >> $REPORT
+echo $NONRESPONSE >> $REPORT
+echo "" >> $REPORT
+echo "" >> $REPORT
+echo "Core files found:" >> $REPORT
+cat $TMP >> $REPORT
+
+/bin/rm $TMP
+
+/usr/ucb/mail -s "Core Finder Report" eadavies,jeh,avann,nbeatty < $REPORT

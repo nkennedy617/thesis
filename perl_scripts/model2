@@ -1,0 +1,30 @@
+#!/bin/sh
+
+#---------------------------------------------------------------
+# rebooted solaris boxes
+# Written by : Nell Beatty 
+# Created on : 05/00/2000
+# Last Modified : 
+#
+# This script is going to do an rup, and find out which solaris boxes
+# that don't dual boot were rebooted with the last 24 hours
+#
+# CALLED FROM : cron on scotty
+#---------------------------------------------------------------
+
+REPORT=/home/nbeatty/perl_scripts/reboot.rep
+RECIPIENTS="nbeatty,jeh"
+DUALBOOT="spock|stormy"
+TMP=/home/nbeatty/perl_scripts/reboot.tmp
+
+#clean out the previous files
+cat /dev/null > $TMP
+cat /dev/null > $REPORT
+
+/bin/rup | /bin/egrep -v $DUALBOOT >> $TMP
+`cat $TMP | grep -v day >> $REPORT`
+
+file=`cat $REPORT`
+if [ "$file" != "" ]; then
+   /usr/ucb/mail -s "Rebooted Solaris Report" $RECIPIENTS < $REPORT
+fi

@@ -1,0 +1,127 @@
+#!/bin/sh
+
+#---------------------------------------------------------------
+# load average on solaris boxes
+# Written by : Nell Beatty 
+# Created on : 05/04/2000
+# Last Modified : 
+#
+# This script is going to do an rup, and find out which solaris boxes
+# that don't dual boot have a load average greater than their  
+# processors
+#
+# CALLED FROM : cron on scotty
+#---------------------------------------------------------------
+
+REPORT=/home/nbeatty/perl_scripts/loadaverage.rep
+MULTIPROCESSORS=/home/nbeatty/perl_scripts/wsname.mp
+#MULTIPROCESSORS=/usr/local/share/adm/Ws.index/wsname.mp
+RECIPIENTS="nbeatty"
+DUALBOOT="spock|stormy"
+TMP=/home/nbeatty/perl_scripts/loadaverage.tmp
+TMP2=/home/nbeatty/perl_scripts/loadaverage.tmp2
+
+#clean out the previous files
+cat /dev/null > $TMP
+cat /dev/null > $REPORT
+
+#get the rup data
+/bin/rup | /bin/egrep -v $DUALBOOT >> $TMP
+
+#initialize machine
+machine=""
+
+#This loop will execute for each multiprocessor machine in the department
+for multi in `cat $MULTIPROCESSORS`; do
+    
+   #set/reset number of processors (numprocs) and the loadaverage of the machine
+    numprocs=0
+    loadaverage=0
+
+    #find out the name of the machine, and add it to a dynamic list of the 
+    #multiprocessor machines
+    name=`echo $multi | awk -F":" '{print $1}'`
+    machine="`echo $machine` `echo $name`"
+
+    #find out how many processors the machine has
+    numprocs=`echo $multi | awk -F":" '{print $2}'`
+
+    #find the line that goes with that machine name out of the rupdata
+    line=`cat $TMP | grep $name`
+
+    #if the line is null, individually rup the machine
+    if [ "$line" != "" ]; then
+       cat /dev/null   
+    else 
+       line=`rup $name`
+    fi
+	
+	#the loadaverage should be the 8th field
+ 	#however, the rup data is not always consistent and could be 9th
+    	loadaverage=`echo $line | awk -F" " '{print $8}'`
+        if [ $loadaverage = "average:" ]; then
+    	   loadaverage=`echo $line | awk -F" " '{print $9}'`
+        fi	
+
+	#cut the number.units into a whole number
+    	loadaverage=`echo $loadaverage | cut -d"." -f1`
+
+	#this forces the loadaverage and numprocs into numbers
+    	loadaverage=`expr $loadaverage + 0`
+
+	#add one unit to the multiprocessor number to see if it is
+	#overloaded then add it to the report if it is
+    	numprocs=`expr $numprocs + 1`
+    	if [ $loadaverage -ge $numprocs ]; then
+           echo "          " $line >> $REPORT
+    	fi
+done
+#this section takes the dynamically created list of multiprocessor machines 
+#and separates it by the pipe then does an egrep so that those machines are
+#removed and leaves only the single processor units
+machine=`echo $machine | /bin/tr " " "|"`
+machine=`echo "$machine"`
+cat /dev/null > $TMP2
+cat $TMP | egrep -v "$machine" >> $TMP2
+
+#this section forces cat to read the tmp2 file as lines, not individual words
+OLDIFS="$IFS"
+IFS="$OLDIFS"
+IFS="
+"
+#this section figures out if the single processor units are overloaded
+for single in `cat $TMP2`;do
+   
+   #set/reset number of processors (numprocs) and the loadaverage of the machine
+    numprocs=2
+    loadaverage=0
+
+	#the loadaverage should be the 8th field
+ 	#however, the rup data is not always consistent and could be 9th
+    	loadaverage=`echo $single | awk -F" " '{print $8}'`
+        if [ $loadaverage = "average:" ]; then
+    	   loadaverage=`echo $single | awk -F" " '{print $9}'`
+        fi	
+
+	#cut the number.units into a whole number
+    	loadaverage=`echo $loadaverage | cut -d"." -f1`
+
+	#this forces the loadaverage into number
+    	loadaverage=`expr $loadaverage + 0`
+
+	#check the single processor number to see if it is
+	#overloaded then add it to the report if it is
+    	if [ $loadaverage -ge $numprocs ]; then
+           echo $single >> $REPORT
+    	fi
+done
+
+#reset the "line" separator
+IFS="$OLDIFS"
+
+#see if there is anything in the report
+#if it is empty, then don't mail it  -- else send it out
+file=`cat $REPORT`
+if [ "$file" != "" ]; then
+    /usr/ucb/mail -s "Overloaded Machine Report" $RECIPIENTS < $REPORT
+fi

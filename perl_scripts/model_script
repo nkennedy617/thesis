@@ -1,0 +1,15 @@
+#!/bin/sh
+
+CHMOD=/usr/bin/chmod
+KILL=/usr/bin/kill
+
+INETD=`ps -ef | grep inetd | grep -v grep | awk '{print $2}'`
+SYSLOGD=`ps -ef | grep syslogd | grep -v grep | awk '{print $2}'`
+
+cp /common/data/tcpwrappers/hosts.allow /etc/hosts.allow
+$CHMOD 644 /etc/hosts.allow
+
+sleep 1
+
+$KILL -1 $INETD
+$KILL -1 $SYSLOGD
